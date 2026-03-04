@@ -1,0 +1,34 @@
+header,
+footer {
+  width: 100%;
+  left: 0;
+  right: 0;
+  background: #1e2328;
+  color: #f0e6d2;
+  z-index: 1000;
+}
+
+header {
+  position: fixed;
+  top: 0;
+  height: 64px;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0px;
+  border-bottom: 1px solid #5b5a56;
+}
+
+footer {
+  position: fixed;
+  bottom: 0;
+  height: 64px;
+  border-top: 2px solid #5b5a56;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  display: flex;
+  padding: 10px 0px;
+}
