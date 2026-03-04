@@ -10,44 +10,33 @@ const cardStyle = {
       color: "#f0e6d2",
       fontSize: "16px",
       fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
-      "::placeholder": {
-        color: "#a09b8c",
-      },
+      "::placeholder": { color: "#a09b8c" },
       iconColor: "#c89b3c",
       backgroundColor: "#1e2328",
       letterSpacing: "0.5px",
     },
-    invalid: {
-      color: "#ff6b6b",
-      iconColor: "#ff6b6b",
-    },
-    complete: {
-      color: "#c89b3c",
-    },
+    invalid: { color: "#ff6b6b", iconColor: "#ff6b6b" },
+    complete: { color: "#c89b3c" },
   },
 };
 
 export default function ApplicationCard({ applications, user, jobEmployerId }) {
-  const [apps, setApps] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [editingApp, setEditingApp] = useState({ id: null, coverLetter: "", price: 0 });
   const [loadingPay, setLoadingPay] = useState({});
   const [updatingStatus, setUpdatingStatus] = useState({});
-  const [editingApp, setEditingApp] = useState({
-    id: null,
-    coverLetter: "",
-    price: 0,
-  });
-  const [selectedId, setSelectedId] = useState(null);
   const elements = useElements();
   const stripe = useStripe();
-  const [statuses, setStatuses] = useState(
-    applications.reduce((acc, app) => {
-      acc[app.id] = app.status;
-      return acc;
-    }, {}),
-  );
+
+  const [statuses, setStatuses] = useState({});
 
   useEffect(() => {
-    setApps(applications || []);
+    setStatuses(
+      applications.reduce((acc, app) => {
+        acc[app.id] = app.status;
+        return acc;
+      }, {}),
+    );
     setSelectedId(applications?.[0]?.id || null);
   }, [applications]);
 
@@ -55,96 +44,101 @@ export default function ApplicationCard({ applications, user, jobEmployerId }) {
 
   async function handlePay(e, app) {
     e.preventDefault();
-
     if (!elements) return;
 
     try {
-      setLoadingPay((prev) => ({ ...prev, [app.id]: true }));
+      setLoadingPay((p) => ({ ...p, [app.id]: true }));
       const card = elements.getElement(CardElement);
       await payApplication(app.id, app.price, card, stripe);
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/applications/${app.id}/paid`, { method: "PUT", credentials: "include" });
-      const data = await res.json();
 
-      if (!res.ok) throw new Error(data.error || "Failed to update status");
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/applications/${app.id}/paid`, {
+        method: "PUT",
+        credentials: "include",
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
 
       setStatuses((prev) => ({ ...prev, [app.id]: "paid" }));
       alert(`Paid €${app.price} to ${app.freelancer_email}!`);
     } catch (error) {
-      console.error(error);
       alert("Payment failed: " + error.message);
     } finally {
-      setLoadingPay((prev) => ({ ...prev, [app.id]: false }));
+      setLoadingPay((p) => ({ ...p, [app.id]: false }));
     }
   }
 
   async function handleStatusChange(app, newStatus) {
-    setUpdatingStatus((prev) => ({ ...prev, [app.id]: true }));
+    setUpdatingStatus((p) => ({ ...p, [app.id]: true }));
 
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/applications/${app.id}/${newStatus}`, { method: "PUT", credentials: "include" });
-      const data = await res.json();
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/applications/${app.id}/${newStatus}`, {
+        method: "PUT",
+        credentials: "include",
+      });
 
-      if (!res.ok) throw new Error(data.error || "Failed to update status");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
 
       setStatuses((prev) => ({ ...prev, [app.id]: newStatus }));
       alert(data.message);
     } catch (error) {
-      console.error(error);
       alert("Error updating status: " + error.message);
     } finally {
-      setUpdatingStatus((prev) => ({ ...prev, [app.id]: false }));
+      setUpdatingStatus((p) => ({ ...p, [app.id]: false }));
     }
   }
 
   async function deleteConfirmation(appId) {
-    if (window.confirm("Do you really want to delete this job application ?")) {
-      try {
-        if (!appId) {
-          alert("Please give a valid application id");
-        }
+    if (!window.confirm("Do you really want to delete this application?")) return;
 
-        await fetch(`${process.env.REACT_APP_API_URL}/applications/${appId}`, {
-          method: "DELETE",
-          credentials: "include",
-        });
-      } catch (error) {
-        console.error(error);
-        alert(error);
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/applications/${appId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error);
       }
+    } catch (error) {
+      alert(error.message);
     }
   }
 
   async function handleEditSave(appId, newCoverLetter, newPrice) {
     if (!newCoverLetter || !validateLength(newCoverLetter, MAX_COVER_LETTER_LENGTH)) {
-      alert(`Cover letter too long or empty`);
+      alert("Invalid cover letter");
       return;
     }
     if (!validatePositiveNumber(newPrice)) {
       alert("Invalid price");
       return;
     }
+
     try {
       const safe = sanitize(newCoverLetter.trim());
+
       const res = await fetch(`${process.env.REACT_APP_API_URL}/applications/${appId}`, {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ coverLetter: safe, price: newPrice }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to update application");
 
-      setApps((prev) => prev.map((app) => (app.id === appId ? { ...app, cover_letter: newCoverLetter, price: newPrice } : app)));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
       setEditingApp({ id: null, coverLetter: "", price: 0 });
     } catch (error) {
-      console.error(error);
       alert(error.message);
     }
   }
 
   return (
     <div>
-      {apps.map((app) => {
+      {applications.map((app) => {
         const isSelected = selectedId === app.id;
         const isOwner = app.freelancer_id === user.id;
 
@@ -159,12 +153,14 @@ export default function ApplicationCard({ applications, user, jobEmployerId }) {
                   <>
                     <div>
                       <label>Cover Letter:</label>
-                      <textarea value={editingApp.coverLetter} onChange={(e) => setEditingApp((prev) => ({ ...prev, coverLetter: e.target.value }))} maxLength={MAX_COVER_LETTER_LENGTH} />
+                      <textarea value={editingApp.coverLetter} onChange={(e) => setEditingApp((p) => ({ ...p, coverLetter: e.target.value }))} maxLength={MAX_COVER_LETTER_LENGTH} />
                     </div>
+
                     <div>
                       <label>Price:</label>
-                      <input type="number" value={editingApp.price} onChange={(e) => setEditingApp((prev) => ({ ...prev, price: Number(e.target.value) }))} />
+                      <input type="number" value={editingApp.price} onChange={(e) => setEditingApp((p) => ({ ...p, price: Number(e.target.value) }))} />
                     </div>
+
                     <button onClick={() => handleEditSave(app.id, editingApp.coverLetter, editingApp.price)}>Save</button>
                     <button onClick={() => setEditingApp({ id: null, coverLetter: "", price: 0 })}>Cancel</button>
                   </>
@@ -191,7 +187,7 @@ export default function ApplicationCard({ applications, user, jobEmployerId }) {
 
               {(isEmployer || isOwner) && (
                 <div>
-                  {editingApp.id !== app.id && isOwner && (
+                  {editingApp.id !== app.id && isOwner && statuses[app.id] !== "paid" && (
                     <img
                       src="https://www.svgrepo.com/show/522525/edit-2.svg"
                       alt="edit_icon"
@@ -199,7 +195,7 @@ export default function ApplicationCard({ applications, user, jobEmployerId }) {
                       onClick={() => setEditingApp({ id: app.id, coverLetter: app.cover_letter, price: app.price })}
                     />
                   )}
-                  <img src="https://www.svgrepo.com/show/470444/trash.svg" alt="trash_icon" className="icon" onClick={() => deleteConfirmation(app.id)} />
+                  {statuses[app.id] !== "paid" && <img src="https://www.svgrepo.com/show/470444/trash.svg" alt="trash_icon" className="icon" onClick={() => deleteConfirmation(app.id)} />}
                 </div>
               )}
             </div>

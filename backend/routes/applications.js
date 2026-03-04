@@ -30,6 +30,20 @@ router.put("/:applicationId/:newStatus", verifyRole("employer"), async (req, res
     if (application.status !== newApplicationStatus) {
       await db.none("UPDATE applications SET status = $1 WHERE id = $2", [newApplicationStatus, applicationId]);
 
+      const updatedApplication = await db.one(
+        "SELECT a.id, u.id AS freelancer_id, u.email AS freelancer_email, a.cover_letter, a.price, status FROM applications a JOIN users u ON u.id = a.freelancer_id WHERE a.id = $1",
+        [applicationId],
+      );
+
+      const io = req.app.get("io");
+      const userSockets = req.app.get("userSockets");
+      const recipientId = updatedApplication.freelancer_id;
+      if (recipientId && userSockets.has(recipientId)) {
+        userSockets.get(recipientId).forEach((socketId) => {
+          io.to(socketId).emit("application:updated", { updatedApplication });
+        });
+      }
+
       res.status(200).json({ message: "Application updated successfuly" });
     } else {
       res.status(200).json({ message: "No change: status already up to date" });
@@ -61,6 +75,27 @@ router.put("/:applicationId", verifyRole("freelancer"), async (req, res) => {
     }
 
     await db.none("UPDATE applications SET cover_letter = $1, price = $2 WHERE id = $3", [coverLetter ?? application.cover_letter, price ?? application.price, applicationId]);
+
+    const updatedApplication = await db.one(
+      "SELECT a.id, u.id AS freelancer_id, u.email AS freelancer_email, a.cover_letter, a.price, status FROM applications a JOIN users u ON u.id = a.freelancer_id WHERE a.id = $1",
+      [applicationId],
+    );
+
+    const io = req.app.get("io");
+    const userSockets = req.app.get("userSockets");
+    const recipientId = updatedApplication.freelancer_id;
+    const employerId = application.employer_id;
+    if (recipientId && userSockets.has(recipientId)) {
+      userSockets.get(recipientId).forEach((socketId) => {
+        io.to(socketId).emit("application:updated", { updatedApplication });
+      });
+    }
+    if (employerId && userSockets.has(employerId)) {
+      userSockets.get(employerId).forEach((socketId) => {
+        io.to(socketId).emit("application:updated", { updatedApplication });
+      });
+    }
+
     res.status(200).json({ message: "Application updated successfuly" });
   } catch (error) {
     console.error(error);

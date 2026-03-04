@@ -4,9 +4,8 @@ import { socket } from "../socket";
 import "./JobCard.css";
 import { MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_TAGS_INPUT_LENGTH, MAX_COVER_LETTER_LENGTH, validateLength, sanitize, validatePositiveNumber } from "../utils/validation";
 
-export default function JobCard({ jobs, jobId, setJobs, user, onSelectJob }) {
+export default function JobCard({ job, user }) {
   const [applications, setApplications] = useState([]);
-  const [job, setJob] = useState({});
   const [applying, setApplying] = useState(false);
   const [editing, setEditing] = useState(false);
 
@@ -19,53 +18,52 @@ export default function JobCard({ jobs, jobId, setJobs, user, onSelectJob }) {
   const [price, setPrice] = useState(0);
 
   useEffect(() => {
-    if (!jobId) {
-      alert("A jobId is required");
-      return;
-    }
+    if (!job) return;
 
-    async function fetchJob() {
-      if (!jobs.some((job) => job.id === Number(jobId))) {
-        return;
-      }
+    setTitle(job.title);
+    setDescription(job.description);
+    setBudget(job.budget);
+    setTags(job.tags?.join(", ") || "");
 
+    async function fetchJobDetails() {
       try {
-        const res = await fetch(`${process.env.REACT_APP_API_URL}/jobs/${jobId}`, {
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/jobs/${job.id}`, {
           credentials: "include",
         });
+
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to fetch job data");
+        if (!res.ok) throw new Error(data.error);
 
-        if ((user.role === "employer" && user.id === data.job.employer_id) || user.role === "freelancer") {
-          setApplications(data.applications || []);
-        }
-        setJob(data.job);
-
-        setTitle(data.job.title);
-        setDescription(data.job.description);
-        setBudget(data.job.budget);
-        setTags(data.job.tags?.join(", ") || "");
-      } catch (error) {
-        alert(error.message);
+        setApplications(data.applications || []);
+      } catch (err) {
+        console.error(err);
       }
     }
-    fetchJob();
+
+    fetchJobDetails();
 
     const handleApplicationCreated = ({ newApplication }) => {
       setApplications((prev) => [...prev, newApplication]);
     };
 
+    const handleApplicationUpdated = ({ updatedApplication }) => {
+      setApplications((prev) => prev.map((a) => (Number(a.id) === Number(updatedApplication.id) ? { ...a, ...updatedApplication } : a)));
+    };
+
     const handleApplicationDeleted = ({ applicationId }) => {
-      setApplications((prev) => prev.filter((app) => app.id !== Number(applicationId)));
+      setApplications((prev) => prev.filter((a) => a.id !== Number(applicationId)));
     };
 
     socket.on("application:created", handleApplicationCreated);
+    socket.on("application:updated", handleApplicationUpdated);
     socket.on("application:deleted", handleApplicationDeleted);
+
     return () => {
       socket.off("application:created", handleApplicationCreated);
+      socket.off("application:updated", handleApplicationUpdated);
       socket.off("application:deleted", handleApplicationDeleted);
     };
-  }, [jobId]);
+  }, [job]);
 
   async function applyJob() {
     if (!coverLetter || !price) {
@@ -84,7 +82,7 @@ export default function JobCard({ jobs, jobId, setJobs, user, onSelectJob }) {
 
     try {
       setApplying(true);
-      await fetch(`${process.env.REACT_APP_API_URL}/jobs/${jobId}/apply`, {
+      await fetch(`${process.env.REACT_APP_API_URL}/jobs/${job.id}/apply`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-type": "application/json" },
@@ -133,7 +131,7 @@ export default function JobCard({ jobs, jobId, setJobs, user, onSelectJob }) {
           .filter((t) => t.length > 0),
       };
 
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/jobs/${jobId}`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/jobs/${job.id}`, {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -143,8 +141,6 @@ export default function JobCard({ jobs, jobId, setJobs, user, onSelectJob }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setJob(data.job);
-      setJobs((prev) => prev.map((job) => (job.id === jobId ? data.job : job)));
       setEditing(false);
       alert("Job updated!");
     } catch (error) {
@@ -153,10 +149,10 @@ export default function JobCard({ jobs, jobId, setJobs, user, onSelectJob }) {
     }
   }
 
-  async function deleteConfirmation(jobId) {
+  async function deleteConfirmation() {
     if (window.confirm("Do you really want to delete this job offer ?")) {
       try {
-        await fetch(`${process.env.REACT_APP_API_URL}/jobs/${jobId}`, {
+        await fetch(`${process.env.REACT_APP_API_URL}/jobs/${job.id}`, {
           method: "DELETE",
           credentials: "include",
         });
@@ -212,7 +208,7 @@ export default function JobCard({ jobs, jobId, setJobs, user, onSelectJob }) {
           {user.role === "employer" && user.id === job.employer_id && (
             <div>
               <img src="https://www.svgrepo.com/show/522525/edit-2.svg" alt="edit_icon" className="icon" onClick={() => setEditing(true)} />
-              <img src="https://www.svgrepo.com/show/470444/trash.svg" alt="trash_icon" className="icon" onClick={() => deleteConfirmation(job.id)} />
+              <img src="https://www.svgrepo.com/show/470444/trash.svg" alt="trash_icon" className="icon" onClick={() => deleteConfirmation()} />
             </div>
           )}
         </>

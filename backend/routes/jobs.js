@@ -41,7 +41,7 @@ router.get("/", async (req, res) => {
 
     const tagArray = tags ? tags.split(",") : null;
 
-    let query = `SELECT jobs.id, jobs.title, jobs.employer_id, users.email, jobs.tags FROM jobs JOIN users ON users.id = jobs.employer_id WHERE 1=1`;
+    let query = `SELECT jobs.id, jobs.title, jobs.description, jobs.budget, jobs.employer_id, users.email, jobs.tags FROM jobs JOIN users ON users.id = jobs.employer_id WHERE 1=1`;
     const params = [];
 
     if (tagArray) {
@@ -213,6 +213,9 @@ router.put("/:jobId", auth, verifyRole("employer"), async (req, res) => {
       tags,
       jobId,
     ]);
+
+    const io = req.app.get("io");
+    io.emit("job:updated", { updatedJob });
 
     res.status(200).json({ message: "Job updated successfully", job: updatedJob });
   } catch (error) {

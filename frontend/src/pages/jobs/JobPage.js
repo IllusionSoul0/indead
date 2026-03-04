@@ -16,7 +16,7 @@ export default function JobPage({ user }) {
   const [tags, setTags] = useState(params.get("tags") || "");
 
   const [nextSelectedId, setNextSelectedId] = useState(null);
-  const selectedId = searchParams.get("jobId");
+  const [selectedId, setSelectedId] = useState(params.get("jobId") || null);
 
   useEffect(() => {
     const loadJobs = async () => {
@@ -31,21 +31,31 @@ export default function JobPage({ user }) {
       });
     };
 
+    const handleJobUpdated = ({ updatedJob }) => {
+      setJobs((prev) => prev.map((job) => (Number(job.id) === Number(updatedJob.id) ? { ...job, ...updatedJob } : job)));
+    };
+
     const handleJobDeleted = ({ jobId }) => {
       setJobs((prevJobs) => {
-        const newJobs = prevJobs.filter((job) => job.id !== Number(jobId));
+        const newJobs = prevJobs.filter((job) => Number(job.id) !== Number(jobId));
 
-        if (!newJobs.some((job) => job.id === Number(searchParams.get("jobId")))) {
-          setNextSelectedId(newJobs[0]?.id || null);
-        }
+        setSelectedId((currentSelectedId) => {
+          if (!newJobs.some((job) => Number(job.id) === Number(currentSelectedId))) {
+            return newJobs[0]?.id || null;
+          }
+          return currentSelectedId;
+        });
+
         return newJobs;
       });
     };
 
     socket.on("job:created", handleJobCreated);
+    socket.on("job:updated", handleJobUpdated);
     socket.on("job:deleted", handleJobDeleted);
     return () => {
       socket.off("job:created", handleJobCreated);
+      socket.off("job:updated", handleJobUpdated);
       socket.off("job:deleted", handleJobDeleted);
     };
   }, []);
@@ -102,6 +112,7 @@ export default function JobPage({ user }) {
     if (tags) params.set("tags", tags);
     params.set("jobId", jobId);
     navigate(`?${params.toString()}`, { replace: true });
+    setSelectedId(jobId);
   };
 
   if (loading) return <div>Fetching jobs...</div>;
@@ -131,7 +142,7 @@ export default function JobPage({ user }) {
 
           {user && jobs.length > 0 && selectedId && (
             <div className="right-page">
-              <JobCard jobs={jobs} jobId={selectedId} setJobs={setJobs} user={user} onSelectJob={onSelectJob} />
+              <JobCard job={jobs.find((j) => Number(j.id) === Number(selectedId))} user={user} />
             </div>
           )}
         </div>
