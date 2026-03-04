@@ -19,7 +19,6 @@ export default function JobCard({ job, user }) {
 
   useEffect(() => {
     if (!job) return;
-
     setTitle(job.title);
     setDescription(job.description);
     setBudget(job.budget);
@@ -43,6 +42,7 @@ export default function JobCard({ job, user }) {
     fetchJobDetails();
 
     const handleApplicationCreated = ({ newApplication }) => {
+      if (Number(job.id) !== Number(newApplication.job_id)) return;
       setApplications((prev) => [...prev, newApplication]);
     };
 
@@ -193,6 +193,7 @@ export default function JobCard({ job, user }) {
       ) : (
         <>
           <h2>{job.title}</h2>
+          <p>Employer: {job.email}</p>
           <p>Description : {job.description}</p>
           <p>Budget : {job.budget}€</p>
           {job.tags && (

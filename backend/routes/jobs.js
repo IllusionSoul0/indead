@@ -86,12 +86,12 @@ router.get("/:jobId", auth, async (req, res) => {
 
     if (req.user.role === "employer" && req.user.id === job.employer_id) {
       applications = await db.any(
-        "SELECT a.id, a.cover_letter, a.price, a.status, u.id AS freelancer_id, u.email AS freelancer_email FROM applications a JOIN users u ON u.id = a.freelancer_id WHERE a.job_id = $1 ORDER BY a.created_at DESC",
+        "SELECT a.id, a.job_id, a.cover_letter, a.price, a.status, u.id AS freelancer_id, u.email AS freelancer_email FROM applications a JOIN users u ON u.id = a.freelancer_id WHERE a.job_id = $1 ORDER BY a.created_at DESC",
         [jobId],
       );
     } else if (req.user.role === "freelancer") {
       const application = await db.oneOrNone(
-        "SELECT a.id, u.id AS freelancer_id, u.email AS freelancer_email, a.cover_letter, a.price, status FROM applications a JOIN users u ON u.id = a.freelancer_id WHERE job_id = $1 AND freelancer_id = $2",
+        "SELECT a.id, a.job_id, u.id AS freelancer_id, u.email AS freelancer_email, a.cover_letter, a.price, status FROM applications a JOIN users u ON u.id = a.freelancer_id WHERE job_id = $1 AND freelancer_id = $2",
         [jobId, req.user.id],
       );
       if (application) applications.push(application);
@@ -126,7 +126,7 @@ router.post("/:jobId/apply", auth, verifyRole("freelancer"), async (req, res) =>
     const newInsertedApplication = await db.one("INSERT INTO applications(job_id, freelancer_id, cover_letter, price) VALUES ($1, $2, $3, $4) RETURNING *", [jobId, freelancerId, coverLetter, price]);
 
     const newApplication = await db.one(
-      "SELECT a.id, u.id AS freelancer_id, u.email AS freelancer_email, a.cover_letter, a.price, a.status, j.employer_id FROM applications a JOIN users u ON u.id = a.freelancer_id JOIN jobs j ON j.id = a.job_id WHERE a.id = $1",
+      "SELECT a.id, a.job_id, u.id AS freelancer_id, u.email AS freelancer_email, a.cover_letter, a.price, a.status, j.employer_id FROM applications a JOIN users u ON u.id = a.freelancer_id JOIN jobs j ON j.id = a.job_id WHERE a.id = $1",
       [newInsertedApplication.id],
     );
 
